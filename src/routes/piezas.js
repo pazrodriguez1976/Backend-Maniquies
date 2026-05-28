@@ -5,8 +5,17 @@ const { piezas, catalogo_piezas } = require("../data/db");
 // GET /piezas → todas las piezas
 router.get("/", (req, res) => {
   const { material, color } = req.query;
-  let resultado = piezas;
+  
+  // 1. Agrego la descripción a cada pieza cruzando los datos con el catálogo
+  let resultado = piezas.map((pieza) => {
+    const infoCatalogo = catalogo_piezas.find(c => c.id === pieza.id_catalogo);
+    return {
+      ...pieza,
+      descripcion: infoCatalogo ? infoCatalogo.descripcion : "Pieza desconocida"
+    };
+  });
 
+  // 2. Aplico los filtros si el frontend los manda
   if (material) resultado = resultado.filter(p => p.material.toLowerCase() === material.toLowerCase());
   if (color) resultado = resultado.filter(p => p.color.toLowerCase() === color.toLowerCase());
 
@@ -16,7 +25,17 @@ router.get("/", (req, res) => {
 // GET /piezas/stock → solo las piezas libres
 router.get("/stock", (req, res) => {
   const enStock = piezas.filter((p) => p.id_maniqui === null);
-  res.json(enStock);
+  
+  // Agrego la descripción buscando el id_catalogo en catalogo_piezas
+  const stockConNombres = enStock.map((pieza) => {
+    const infoCatalogo = catalogo_piezas.find(c => c.id === pieza.id_catalogo);
+    return {
+      ...pieza,
+      descripcion: infoCatalogo ? infoCatalogo.descripcion : "Pieza desconocida"
+    };
+  });
+
+  res.json(stockConNombres);
 });
 
 // GET /piezas/:id → una pieza por ID

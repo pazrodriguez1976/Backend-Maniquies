@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { maniquies, piezas } = require("../data/db");
+const { maniquies, piezas, catalogo_piezas } = require("../data/db");
 
 // GET /maniquies → todas las órdenes
 router.get("/", (req, res) => {
@@ -12,7 +12,17 @@ router.get("/:id", (req, res) => {
   const maniqui = maniquies.find((m) => m.id === parseInt(req.params.id));
   if (!maniqui) return res.status(404).json({ error: "Maniquí no encontrado" });
 
-  const piezasAsignadas = piezas.filter((p) => p.id_maniqui === maniqui.id);
+  // Filtra las piezas y agrega la descripción
+  const piezasAsignadas = piezas
+    .filter((p) => p.id_maniqui === maniqui.id)
+    .map((pieza) => {
+      const infoCatalogo = catalogo_piezas.find(c => c.id === pieza.id_catalogo);
+      return {
+        ...pieza,
+        descripcion: infoCatalogo ? infoCatalogo.descripcion : "Pieza desconocida"
+      };
+    });
+
   res.json({ ...maniqui, piezas: piezasAsignadas });
 });
 
@@ -80,17 +90,41 @@ router.patch("/:id/estado", (req, res) => {
   res.json({ mensaje: "Estado actualizado correctamente", maniqui });
 });
 
+
 // PATCH /maniquies/:id/asignar-pieza → asignar una pieza libre al maniquí
 router.patch("/:id/asignar-pieza", (req, res) => {
   const { id_pieza } = req.body;
+  
+  // 1. Busco el maniquí
   const maniqui = maniquies.find((m) => m.id === parseInt(req.params.id));
   if (!maniqui) return res.status(404).json({ error: "Maniquí no encontrado" });
 
-  const pieza = piezas.find((p) => p.id === id_pieza && p.id_maniqui === null);
-  if (!pieza) return res.status(404).json({ error: "Pieza no disponible o ya asignada" });
+  // 2. Busco la pieza que quiero asignar y valido que esté libre (id_maniqui === null)
+  const piezaNueva = piezas.find((p) => p.id === id_pieza && p.id_maniqui === null);
+  if (!piezaNueva) return res.status(404).json({ error: "Pieza no disponible o ya asignada" });
 
-  pieza.id_maniqui = maniqui.id;
-  res.json({ mensaje: "Pieza asignada correctamente", pieza });
+  // 3. Busco a qué categoría pertenece la pieza nueva consultando el catálogo
+  const catalogoNueva = catalogo_piezas.find(c => c.id === piezaNueva.id_catalogo);
+  if (!catalogoNueva) return res.status(500).json({ error: "Error interno: La pieza no tiene un catálogo válido." });
+  const idCategoriaNueva = catalogoNueva.id_categoria;
+
+  // 4. Valido si el maniquí ya tiene una pieza de esta misma categoría
+  // Obtengo todas las piezas que ya están asignadas a este maniquí
+  const piezasDelManiqui = piezas.filter((p) => p.id_maniqui === maniqui.id);
+  
+  // Verifico si alguna de esas piezas comparte la id_categoria
+  const yaTieneCategoria = piezasDelManiqui.some((p) => {
+    const catalogoAsignada = catalogo_piezas.find(c => c.id === p.id_catalogo);
+    return catalogoAsignada && catalogoAsignada.id_categoria === idCategoriaNueva;
+  });
+
+  if (yaTieneCategoria) {
+    return res.status(400).json({ error: "El maniquí ya tiene una pieza de esa categoría asignada." });
+  }
+
+  // 5. Si pasa todas las validaciones, procedo a realizar la asignación
+  piezaNueva.id_maniqui = maniqui.id;
+  res.json({ mensaje: "Pieza asignada correctamente", pieza: piezaNueva });
 });
 
 // PATCH /maniquies/:id/liberar-pieza → desasignar una pieza del maniquí
