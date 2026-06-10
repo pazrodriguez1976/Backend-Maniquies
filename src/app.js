@@ -1,14 +1,14 @@
 const express = require("express");
-const app = express();
-const cors = require('cors');
+const cors    = require("cors");
+const app     = express();
 
 app.use(express.json());
 app.use(cors());
 
-const piezasRouter = require("./routes/piezas");
+const piezasRouter    = require("./routes/piezas");
 const maniquiesRouter = require("./routes/maniquies");
 
-app.use("/piezas", piezasRouter);
+app.use("/piezas",    piezasRouter);
 app.use("/maniquies", maniquiesRouter);
 
 const PORT = 3000;

@@ -1,8 +1,11 @@
 # Sistema de Gestión para Fábrica de Maniquíes - Backend
 
-Este proyecto consiste en el desarrollo del backend para un sistema de gestión de una fábrica de maniquíes, construido con **Node.js** y **Express.js**. La aplicación permite administrar el inventario de piezas y controlar las órdenes de ensamblaje de los maniquíes.
+## Descripción del Proyecto
+Este proyecto consiste en el desarrollo del backend para un sistema de gestión de una fábrica de maniquíes, construido con Node.js y Express.js. La aplicación permite administrar el inventario de piezas y controlar las órdenes de ensamblaje de los maniquíes.
 
-Actualmente, el sistema simula la persistencia de datos utilizando arreglos en memoria antes de su integración definitiva con un motor de bases de datos relacional (MySQL).
+El sistema cuenta con dos etapas de desarrollo:
+- **Etapa 1:** Persistencia simulada con arreglos en memoria (`src/data/db.js`)
+- **Etapa 2:** Integración con base de datos relacional MySQL (`src/db/dbConnect.js`)
 
 ---
 
@@ -12,22 +15,19 @@ Actualmente, el sistema simula la persistencia de datos utilizando arreglos en m
 backend-maniquies/
 ├── src/
 │   ├── data/
-│   │   └── db.js           ← Arreglos en memoria (simulan las tablas de la BD)
+│   │   └── db.js                ← arreglos en memoria (etapa 1, ya no se usa)
+│   ├── db/
+│   │   └── dbConnect.js         ← conexión MySQL con patrón Singleton
+│   ├── models/
+│   │   ├── pieza.model.js       ← queries SQL para piezas
+│   │   └── maniqui.model.js     ← queries SQL para maniquíes
 │   ├── routes/
-│   │   ├── piezas.js       ← Rutas y lógica para gestión de piezas
-│   │   └── maniquies.js    ← Rutas y lógica para gestión de maniquíes
-│   └── app.js              ← Punto de entrada, configuración del servidor
+│   │   ├── piezas.js            ← endpoints de piezas
+│   │   └── maniquies.js         ← endpoints de maniquíes
+│   └── app.js                   ← punto de entrada, configuración del servidor
 ├── package.json
 └── .gitignore
 ```
-
-**Descripción de cada archivo:**
-
-- `src/app.js`: Punto de entrada de la aplicación. Configura el servidor Express, los middlewares y centraliza las rutas globales.
-- `src/data/db.js`: Módulo que contiene los arreglos en memoria que simulan las tablas de la base de datos (Modelos, Categorías de Piezas, Catálogo de Piezas, Piezas e Inventario de Maniquíes).
-- `src/routes/piezas.js`: Definición de rutas y lógica de negocio para la gestión de piezas del inventario.
-- `src/routes/maniquies.js`: Definición de rutas y lógica de negocio para la gestión de órdenes de ensamblaje y asignación de piezas.
-- `.gitignore`: Archivo para excluir la carpeta de dependencias (`node_modules`) del control de versiones.
 
 ---
 
@@ -35,29 +35,71 @@ backend-maniquies/
 
 - Node.js (versión 14 o superior)
 - npm (incluido con Node.js)
-- Thunder Client (extensión de VS Code) o Postman para probar los endpoints
+- MySQL Server 8.0 corriendo en el puerto 3307
+- Base de datos `fabrica_maniquies` importada (ver sección de base de datos)
 
 ---
 
 ## Instalación y Ejecución
 
-1. Clonar o descargar el repositorio del proyecto.
-
-2. Abrir una terminal en el directorio raíz del proyecto.
-
-3. Instalar las dependencias:
-
+**1. Instalar dependencias:**
 ```bash
 npm install
 ```
 
-4. Iniciar el servidor:
+**2. Verificar que MySQL esté corriendo:**
+```bash
+sudo systemctl status mysql
+```
 
+**3. Iniciar el servidor:**
 ```bash
 node src/app.js
 ```
 
-El servidor se levantará en: `http://localhost:3000`
+Al iniciar correctamente se muestran los siguientes mensajes:
+```
+Conexión a MySQL establecida correctamente
+Servidor corriendo en http://localhost:3000
+```
+
+---
+
+## Configuración de la Base de Datos
+
+La base de datos utilizada es `fabrica_maniquies`. Los scripts de creación se encuentran en el repositorio de base de datos del proyecto.
+
+Los scripts deben ejecutarse en este orden:
+
+```bash
+mysql -u root -p -P 3307 --protocol=TCP < 1_creates.sql
+mysql -u root -p -P 3307 --protocol=TCP < 2_inserts.sql
+mysql -u root -p -P 3307 --protocol=TCP fabrica_maniquies < 3_modificaciones.sql
+```
+
+### Tablas de la base de datos
+
+| Tabla | Descripción |
+|---|---|
+| `Modelo` | Tipos de maniquí (Mujer, Hombre, Niña, Niño) |
+| `Categoria_Pieza` | Categorías de piezas (Cabeza, Torso, Brazos, etc.) |
+| `Catalogo_Pieza` | Combinaciones válidas de modelo y categoría |
+| `Maniqui` | Órdenes de ensamblaje |
+| `Pieza` | Inventario físico de piezas |
+
+---
+
+## Patrón de Arquitectura
+
+El proyecto sigue el patrón **Ruta → Modelo → Query SQL**, tal como indica la cátedra:
+
+```
+routes/piezas.js           ← recibe la petición HTTP
+    models/pieza.model.js  ← ejecuta la query SQL
+        db/dbConnect.js    ← conexión singleton a MySQL
+```
+
+La conexión a MySQL se implementa con el patrón **Singleton**: se crea una única instancia de conexión en `dbConnect.js` y Node.js la reutiliza en todos los módulos que la importan.
 
 ---
 
@@ -69,14 +111,14 @@ El servidor se levantará en: `http://localhost:3000`
 
 #### `GET /piezas`
 
-Obtiene el listado de todas las piezas registradas en el inventario. Admite filtros opcionales por query params.
+Obtiene el listado de todas las piezas con descripción armada por JOIN entre `Pieza`, `Catalogo_Pieza`, `Categoria_Pieza` y `Modelo`.
 
 **Parámetros opcionales (Query Params):**
 
-| Parámetro | Tipo   | Descripción                        |
-|-----------|--------|------------------------------------|
-| material  | string | Filtra por tipo de material        |
-| color     | string | Filtra por color                   |
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| material | string | Filtra por material |
+| color | string | Filtra por color |
 
 **Ejemplo de request:**
 ```
@@ -87,11 +129,13 @@ GET http://localhost:3000/piezas?material=Plástico&color=Blanco
 ```json
 [
   {
-    "id": 1,
-    "id_catalogo": 1,
+    "id": 5001,
+    "id_catalogo": 101,
     "material": "Plástico",
     "color": "Blanco",
-    "id_maniqui": null
+    "estado_calidad": "Disponible",
+    "id_maniqui": null,
+    "descripcion": "Cabeza de Mujer"
   }
 ]
 ```
@@ -100,65 +144,29 @@ GET http://localhost:3000/piezas?material=Plástico&color=Blanco
 
 #### `GET /piezas/stock`
 
-Obtiene únicamente las piezas libres en el depósito (campo `id_maniqui` igual a `null`).
-
-**Ejemplo de request:**
-```
-GET http://localhost:3000/piezas/stock
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-[
-  {
-    "id": 1,
-    "id_catalogo": 1,
-    "material": "Plástico",
-    "color": "Blanco",
-    "id_maniqui": null
-  }
-]
-```
+Obtiene las piezas con `id_maniqui IS NULL`, es decir, las que están libres en el depósito.
 
 ---
 
 #### `GET /piezas/:id`
 
-Obtiene el detalle de una pieza específica por su ID.
-
-**Ejemplo de request:**
-```
-GET http://localhost:3000/piezas/1
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-{
-  "id": 1,
-  "id_catalogo": 1,
-  "material": "Plástico",
-  "color": "Blanco",
-  "id_maniqui": null
-}
-```
+Obtiene una pieza por su ID.
 
 **Response de error `404 Not Found`:**
 ```json
-{
-  "error": "Pieza no encontrada"
-}
+{ "error": "Pieza no encontrada" }
 ```
 
 ---
 
 #### `POST /piezas`
 
-Agrega una nueva pieza al inventario. El campo `id_maniqui` se inicializa automáticamente en `null`.
+Agrega una nueva pieza al inventario. El campo `id_maniqui` se inicializa en `NULL` y `estado_calidad` en `Disponible` automáticamente.
 
 **Body (JSON):**
 ```json
 {
-  "id_catalogo": 1,
+  "id_catalogo": 101,
   "material": "Plástico",
   "color": "Blanco"
 }
@@ -167,18 +175,13 @@ Agrega una nueva pieza al inventario. El campo `id_maniqui` se inicializa autom�
 **Ejemplo de response exitoso `201 Created`:**
 ```json
 {
-  "id": 5,
-  "id_catalogo": 1,
+  "id": 5122,
+  "id_catalogo": 101,
   "material": "Plástico",
   "color": "Blanco",
-  "id_maniqui": null
-}
-```
-
-**Response de error `400 Bad Request`:**
-```json
-{
-  "error": "Faltan campos: id_catalogo, material, color"
+  "estado_calidad": "Disponible",
+  "id_maniqui": null,
+  "descripcion": "Cabeza de Mujer"
 }
 ```
 
@@ -186,158 +189,7 @@ Agrega una nueva pieza al inventario. El campo `id_maniqui` se inicializa autom�
 
 #### `PUT /piezas/:id`
 
-Actualiza las propiedades físicas (material y color) de una pieza existente.
-
-**Ejemplo de request:**
-```
-PUT http://localhost:3000/piezas/1
-```
-
-**Body (JSON):**
-```json
-{
-  "material": "Fibra",
-  "color": "Gris"
-}
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-{
-  "mensaje": "Pieza actualizada correctamente",
-  "pieza": {
-    "id": 1,
-    "id_catalogo": 1,
-    "material": "Fibra",
-    "color": "Gris",
-    "id_maniqui": null
-  }
-}
-```
-
----
-
-#### `DELETE /piezas/:id`
-
-Elimina una pieza del inventario. No permite eliminar piezas que estén asignadas a un maniquí.
-
-**Ejemplo de request:**
-```
-DELETE http://localhost:3000/piezas/1
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-{
-  "mensaje": "Pieza eliminada correctamente",
-  "pieza": {
-    "id": 1,
-    "id_catalogo": 1,
-    "material": "Plástico",
-    "color": "Blanco",
-    "id_maniqui": null
-  }
-}
-```
-
-**Response de error `400 Bad Request` (pieza asignada):**
-```json
-{
-  "error": "No se puede eliminar una pieza asignada a un maniquí"
-}
-```
-
----
-
-### Gestión de Maniquíes (Órdenes de Ensamblaje)
-
----
-
-#### `GET /maniquies`
-
-Obtiene el listado de todas las órdenes de ensamblaje registradas.
-
-**Ejemplo de request:**
-```
-GET http://localhost:3000/maniquies
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-[
-  {
-    "id": 1,
-    "material": "Plástico",
-    "color": "Blanco",
-    "estado": "Pendiente"
-  }
-]
-```
-
----
-
-#### `GET /maniquies/:id`
-
-Obtiene el detalle de un maniquí junto con todas las piezas que tiene asignadas actualmente.
-
-**Ejemplo de request:**
-```
-GET http://localhost:3000/maniquies/1
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-{
-  "id": 1,
-  "material": "Plástico",
-  "color": "Blanco",
-  "estado": "Pendiente",
-  "piezas": [
-    {
-      "id": 2,
-      "id_catalogo": 1,
-      "material": "Plástico",
-      "color": "Blanco",
-      "id_maniqui": 1
-    }
-  ]
-}
-```
-
----
-
-#### `POST /maniquies`
-
-Crea una nueva orden de ensamblaje. El campo `estado` se establece automáticamente como `"Pendiente"`.
-
-**Body (JSON):**
-```json
-{
-  "material": "Plástico",
-  "color": "Blanco"
-}
-```
-
-**Ejemplo de response exitoso `201 Created`:**
-```json
-{
-  "id": 1,
-  "material": "Plástico",
-  "color": "Blanco",
-  "estado": "Pendiente"
-}
-```
-
----
-
-#### `PUT /maniquies/:id`
-
-Edita los datos generales (material y color) de un maniquí existente.
-
-**Ejemplo de request:**
-```
-PUT http://localhost:3000/maniquies/1
-```
+Actualiza el material y color de una pieza.
 
 **Body (JSON):**
 ```json
@@ -347,127 +199,112 @@ PUT http://localhost:3000/maniquies/1
 }
 ```
 
+---
+
+#### `DELETE /piezas/:id`
+
+Elimina una pieza del inventario. No permite eliminar piezas asignadas a un maniquí.
+
+**Response de error `400 Bad Request`:**
+```json
+{ "error": "No se puede eliminar una pieza asignada a un maniquí" }
+```
+
+---
+
+### Gestión de Maniquíes
+
+---
+
+#### `GET /maniquies`
+
+Obtiene todas las órdenes de ensamblaje con JOIN a la tabla `Modelo`.
+
+**Ejemplo de response exitoso `200 OK`:**
+```json
+[
+  {
+    "id": 80,
+    "id_modelo": 1,
+    "nombre_modelo": "Mujer",
+    "material": "Plástico",
+    "color": "Piel",
+    "fecha_ensamblaje": "2024-05-20T03:00:00.000Z",
+    "estado": "Ensamblado"
+  }
+]
+```
+
+---
+
+#### `GET /maniquies/:id`
+
+Obtiene el detalle de un maniquí junto con todas sus piezas asignadas.
+
 **Ejemplo de response exitoso `200 OK`:**
 ```json
 {
-  "mensaje": "Maniquí actualizado correctamente",
-  "maniqui": {
-    "id": 1,
-    "material": "Fibra",
-    "color": "Negro",
-    "estado": "Pendiente"
-  }
+  "id": 80,
+  "id_modelo": 1,
+  "nombre_modelo": "Mujer",
+  "material": "Plástico",
+  "color": "Piel",
+  "fecha_ensamblaje": "2024-05-20T03:00:00.000Z",
+  "estado": "Ensamblado",
+  "piezas": [
+    {
+      "id": 5030,
+      "id_catalogo": 103,
+      "material": "Plástico",
+      "color": "Piel",
+      "estado_calidad": "Disponible",
+      "id_maniqui": 80,
+      "descripcion": "Torso de Mujer"
+    }
+  ]
 }
 ```
 
 ---
 
-#### `PATCH /maniquies/:id/estado`
+#### `POST /maniquies`
 
-Actualiza el estado del proceso de ensamblaje de un maniquí.
-
-**Estados válidos:** `"Pendiente"` → `"En proceso"` → `"Terminado"`
-
-**Ejemplo de request:**
-```
-PATCH http://localhost:3000/maniquies/1/estado
-```
+Crea una nueva orden de ensamblaje. El estado se inicializa en `Pendiente` automáticamente.
 
 **Body (JSON):**
 ```json
 {
-  "estado": "En proceso"
+  "id_modelo": 1,
+  "material": "Plástico",
+  "color": "Blanco"
 }
 ```
 
-**Ejemplo de response exitoso `200 OK`:**
+**Ejemplo de response exitoso `201 Created`:**
 ```json
 {
-  "mensaje": "Estado actualizado correctamente",
-  "maniqui": {
-    "id": 1,
-    "material": "Plástico",
-    "color": "Blanco",
-    "estado": "En proceso"
-  }
-}
-```
-
-**Response de error `400 Bad Request` (estado inválido):**
-```json
-{
-  "error": "Estado inválido. Usá: Pendiente, En proceso, Terminado"
+  "id": 87,
+  "id_modelo": 1,
+  "nombre_modelo": "Mujer",
+  "material": "Plástico",
+  "color": "Blanco",
+  "fecha_ensamblaje": null,
+  "estado": "Pendiente",
+  "piezas": []
 }
 ```
 
 ---
 
-#### `PATCH /maniquies/:id/asignar-pieza`
+#### `PUT /maniquies/:id`
 
-Vincula una pieza libre del depósito a la orden de ensamblaje del maniquí. Cambia el campo `id_maniqui` de la pieza al ID del maniquí.
-
-**Ejemplo de request:**
-```
-PATCH http://localhost:3000/maniquies/1/asignar-pieza
-```
+Edita el material y color de un maniquí.
 
 **Body (JSON):**
 ```json
 {
-  "id_pieza": 2
-}
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-{
-  "mensaje": "Pieza asignada correctamente",
-  "pieza": {
-    "id": 2,
-    "id_catalogo": 1,
-    "material": "Plástico",
-    "color": "Blanco",
-    "id_maniqui": 1
-  }
-}
-```
-
-**Response de error `404 Not Found`:**
-```json
-{
-  "error": "Pieza no disponible o ya asignada"
-}
-```
-
----
-
-#### `PATCH /maniquies/:id/liberar-pieza`
-
-Desvincula una pieza asignada a un maniquí, dejándola nuevamente libre en el stock del depósito (`id_maniqui` vuelve a `null`).
-
-**Ejemplo de request:**
-```
-PATCH http://localhost:3000/maniquies/1/liberar-pieza
-```
-
-**Body (JSON):**
-```json
-{
-  "id_pieza": 2
-}
-```
-
-**Ejemplo de response exitoso `200 OK`:**
-```json
-{
-  "mensaje": "Pieza liberada correctamente",
-  "pieza": {
-    "id": 2,
-    "id_catalogo": 1,
-    "material": "Plástico",
-    "color": "Blanco",
-    "id_maniqui": null
-  }
+  "material": "Fibra",
+  "color": "Negro"
 }
 ```
 
@@ -475,17 +312,51 @@ PATCH http://localhost:3000/maniquies/1/liberar-pieza
 
 #### `DELETE /maniquies/:id`
 
-Elimina una orden de ensamblaje y libera automáticamente todas las piezas que tenía asignadas (su `id_maniqui` vuelve a `null`).
+Elimina un maniquí. Antes de eliminarlo libera todas sus piezas asignadas (`UPDATE Pieza SET id_maniqui = NULL`).
 
-**Ejemplo de request:**
-```
-DELETE http://localhost:3000/maniquies/1
-```
+---
 
-**Ejemplo de response exitoso `200 OK`:**
+#### `PATCH /maniquies/:id/estado`
+
+Actualiza el estado del ensamblaje.
+
+**Estados válidos:** `Pendiente`, `En proceso`, `Ensamblado`
+
+**Body (JSON):**
 ```json
 {
-  "mensaje": "Maniquí eliminado y piezas liberadas correctamente"
+  "estado": "Ensamblado"
+}
+```
+
+---
+
+#### `PATCH /maniquies/:id/asignar-pieza`
+
+Asigna una pieza libre al maniquí. Valida que la pieza esté libre y que el maniquí no tenga ya una pieza de la misma categoría.
+
+**Body (JSON):**
+```json
+{
+  "id_pieza": 5008
+}
+```
+
+**Response de error `400 Bad Request`:**
+```json
+{ "error": "El maniquí ya tiene una pieza de esa categoría asignada" }
+```
+
+---
+
+#### `PATCH /maniquies/:id/liberar-pieza`
+
+Desasigna una pieza del maniquí, dejándola libre en el depósito (`id_maniqui = NULL`).
+
+**Body (JSON):**
+```json
+{
+  "id_pieza": 5008
 }
 ```
 
@@ -493,43 +364,37 @@ DELETE http://localhost:3000/maniquies/1
 
 ## Resumen de Endpoints
 
-| Método   | Endpoint                          | Descripción                                  |
-|----------|-----------------------------------|----------------------------------------------|
-| GET      | `/piezas`                         | Listar todas las piezas (con filtros opcionales) |
-| GET      | `/piezas/stock`                   | Listar piezas libres en depósito             |
-| GET      | `/piezas/:id`                     | Obtener una pieza por ID                     |
-| POST     | `/piezas`                         | Agregar una nueva pieza al inventario        |
-| PUT      | `/piezas/:id`                     | Editar material y color de una pieza         |
-| DELETE   | `/piezas/:id`                     | Eliminar una pieza del inventario            |
-| GET      | `/maniquies`                      | Listar todas las órdenes de ensamblaje       |
-| GET      | `/maniquies/:id`                  | Obtener un maniquí con sus piezas asignadas  |
-| POST     | `/maniquies`                      | Crear una nueva orden de ensamblaje          |
-| PUT      | `/maniquies/:id`                  | Editar datos generales de un maniquí         |
-| DELETE   | `/maniquies/:id`                  | Eliminar un maniquí y liberar sus piezas     |
-| PATCH    | `/maniquies/:id/estado`           | Cambiar el estado del ensamblaje             |
-| PATCH    | `/maniquies/:id/asignar-pieza`    | Asignar una pieza libre a un maniquí         |
-| PATCH    | `/maniquies/:id/liberar-pieza`    | Liberar una pieza asignada a un maniquí      |
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/piezas` | Listar todas las piezas con filtros opcionales |
+| GET | `/piezas/stock` | Listar piezas libres en el depósito |
+| GET | `/piezas/:id` | Obtener una pieza por ID |
+| POST | `/piezas` | Agregar nueva pieza al inventario |
+| PUT | `/piezas/:id` | Editar material y color de una pieza |
+| DELETE | `/piezas/:id` | Eliminar una pieza |
+| GET | `/maniquies` | Listar todas las órdenes de ensamblaje |
+| GET | `/maniquies/:id` | Obtener un maniquí con sus piezas asignadas |
+| POST | `/maniquies` | Crear nueva orden de ensamblaje |
+| PUT | `/maniquies/:id` | Editar datos de un maniquí |
+| DELETE | `/maniquies/:id` | Eliminar un maniquí y liberar sus piezas |
+| PATCH | `/maniquies/:id/estado` | Cambiar el estado del ensamblaje |
+| PATCH | `/maniquies/:id/asignar-pieza` | Asignar una pieza libre a un maniquí |
+| PATCH | `/maniquies/:id/liberar-pieza` | Liberar una pieza de un maniquí |
 
 ---
 
 ## Códigos de Respuesta HTTP
 
-| Código | Significado                                              |
-|--------|----------------------------------------------------------|
-| 200    | OK — La operación se realizó correctamente               |
-| 201    | Created — El recurso fue creado exitosamente             |
-| 400    | Bad Request — Faltan campos o los datos son inválidos    |
-| 404    | Not Found — El recurso solicitado no existe              |
-| 500    | Internal Server Error — Error inesperado en el servidor  |
+| Código | Significado |
+|---|---|
+| 200 | OK — operación exitosa |
+| 201 | Created — recurso creado correctamente |
+| 400 | Bad Request — datos faltantes o inválidos |
+| 404 | Not Found — recurso no encontrado |
+| 500 | Internal Server Error — error en el servidor o en la base de datos |
 
 ---
 
 ## Herramienta de Pruebas
 
-Las pruebas de todos los endpoints se realizaron con **Thunder Client**, extensión de Visual Studio Code. Se validaron los siguientes escenarios para cada endpoint:
-
-- Respuestas exitosas (`200 OK` y `201 Created`)
-- Recursos no encontrados (`404 Not Found`)
-- Peticiones con datos faltantes o inválidos (`400 Bad Request`)
-- Filtros por query params
-- Flujo completo: crear maniquí → asignar pieza → cambiar estado → liberar pieza → eliminar maniquí
+Las pruebas de todos los endpoints se realizaron con **Thunder Client**, extensión de Visual Studio Code. Se validaron respuestas exitosas, errores 404, errores 400 y el flujo completo de crear un maniquí, asignar piezas, cambiar estado y eliminar.
