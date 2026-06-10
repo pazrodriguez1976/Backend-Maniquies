@@ -1,4 +1,4 @@
-const connection = require('../db/dbConnect');
+import connection from '../db/dbConnect.js';
 
 const query = (sql, params = []) => {
   return new Promise((resolve, reject) => {
@@ -9,10 +9,7 @@ const query = (sql, params = []) => {
   });
 };
 
-// ─────────────────────────────────────────────────────────────────
 // GET /piezas → todas las piezas con descripción del catálogo
-// Usa JOIN para armar la descripción: "Cabeza de Mujer"
-// ─────────────────────────────────────────────────────────────────
 const findAll = async (filtros = {}) => {
   let sql = `
     SELECT 
@@ -43,9 +40,7 @@ const findAll = async (filtros = {}) => {
   return await query(sql, params);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // GET /piezas/stock → solo las piezas libres en el depósito
-// ─────────────────────────────────────────────────────────────────
 const findStock = async () => {
   const sql = `
     SELECT 
@@ -65,9 +60,7 @@ const findStock = async () => {
   return await query(sql);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // GET /piezas/:id → una pieza por ID
-// ─────────────────────────────────────────────────────────────────
 const findById = async (id) => {
   const sql = `
     SELECT 
@@ -88,9 +81,7 @@ const findById = async (id) => {
   return results[0] || null;
 };
 
-// ─────────────────────────────────────────────────────────────────
 // POST /piezas → agregar nueva pieza al inventario
-// ─────────────────────────────────────────────────────────────────
 const create = async ({ id_catalogo, material, color, estado_calidad = 'Disponible' }) => {
   const maxResult = await query('SELECT MAX(id_pieza) AS maxId FROM Pieza');
   const nextId = (maxResult[0].maxId || 0) + 1;
@@ -102,32 +93,25 @@ const create = async ({ id_catalogo, material, color, estado_calidad = 'Disponib
   await query(sql, [nextId, id_catalogo, material, color, estado_calidad]);
   return await findById(nextId);
 };
-// ─────────────────────────────────────────────────────────────────
+
 // PUT /piezas/:id → editar material y color de una pieza
-// ─────────────────────────────────────────────────────────────────
 const update = async (id, { material, color }) => {
   const sql = `UPDATE Pieza SET material = ?, color = ? WHERE id_pieza = ?`;
   await query(sql, [material, color, id]);
   return await findById(id);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // DELETE /piezas/:id → eliminar pieza (solo si está libre)
-// ─────────────────────────────────────────────────────────────────
 const remove = async (id) => {
   await query(`DELETE FROM Pieza WHERE id_pieza = ?`, [id]);
 };
 
-// ─────────────────────────────────────────────────────────────────
-// Verificar si una pieza existe y está libre (para asignar)
-// ─────────────────────────────────────────────────────────────────
 const findLibreById = async (id) => {
   const sql = `SELECT * FROM Pieza WHERE id_pieza = ? AND id_maniqui IS NULL`;
   const results = await query(sql, [id]);
   return results[0] || null;
 };
 
-// Obtener el id_categoria de una pieza (para validar duplicados)
 const getCategoriaDepieza = async (id_pieza) => {
   const sql = `
     SELECT Cat.id_categoria
@@ -139,4 +123,4 @@ const getCategoriaDepieza = async (id_pieza) => {
   return results[0] ? results[0].id_categoria : null;
 };
 
-module.exports = { findAll, findStock, findById, create, update, remove, findLibreById, getCategoriaDepieza };
+export default { findAll, findStock, findById, create, update, remove, findLibreById, getCategoriaDepieza };

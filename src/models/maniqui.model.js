@@ -1,4 +1,4 @@
-const connection = require('../db/dbConnect');
+import connection from '../db/dbConnect.js';
 
 const query = (sql, params = []) => {
   return new Promise((resolve, reject) => {
@@ -9,10 +9,7 @@ const query = (sql, params = []) => {
   });
 };
 
-// ─────────────────────────────────────────────────────────────────
 // GET /maniquies → todos los maniquíes
-// Adaptamos los nombres de columnas de la BD a los que usa el front
-// ─────────────────────────────────────────────────────────────────
 const findAll = async () => {
   const sql = `
     SELECT 
@@ -29,11 +26,8 @@ const findAll = async () => {
   return await query(sql);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // GET /maniquies/:id → maniquí con sus piezas asignadas
-// ─────────────────────────────────────────────────────────────────
 const findById = async (id) => {
-  // Primero traemos el maniqui
   const sqlManiqui = `
     SELECT 
       M.id_maniqui                      AS id,
@@ -51,7 +45,6 @@ const findById = async (id) => {
   const maniqui = maniquies[0];
   if (!maniqui) return null;
 
-  // Luego traemos las piezas asignadas a ese maniqui
   const sqlPiezas = `
     SELECT 
       P.id_pieza       AS id,
@@ -72,29 +65,20 @@ const findById = async (id) => {
   return { ...maniqui, piezas };
 };
 
-// ─────────────────────────────────────────────────────────────────
 // POST /maniquies → crear nueva orden de ensamblaje
-// ─────────────────────────────────────────────────────────────────
 const create = async ({ id_modelo, material, color }) => {
   const maxResult = await query('SELECT MAX(id_maniqui) AS maxId FROM Maniqui');
   const nextId = (maxResult[0].maxId || 0) + 1;
-  console.log('Nuevo ID calculado:', nextId);
 
   const sql = `
     INSERT INTO Maniqui (id_maniqui, id_modelo, material_requerido, color_requerido, fecha_ensamblaje, estado_ensamblaje)
     VALUES (?, ?, ?, ?, NULL, 'Pendiente')
   `;
   await query(sql, [nextId, id_modelo, material, color]);
-  console.log('INSERT ejecutado, buscando ID:', nextId);
-
-  const resultado = await findById(nextId);
-  console.log('Resultado findById:', resultado);
-  return resultado;
+  return await findById(nextId);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // PUT /maniquies/:id → editar material y color
-// ─────────────────────────────────────────────────────────────────
 const update = async (id, { material, color }) => {
   const sql = `
     UPDATE Maniqui 
@@ -105,37 +89,26 @@ const update = async (id, { material, color }) => {
   return await findById(id);
 };
 
-// ─────────────────────────────────────────────────────────────────
-// DELETE /maniquies/:id → eliminar maniqui (libera sus piezas antes)
-// ─────────────────────────────────────────────────────────────────
+// DELETE /maniquies/:id → eliminar maniquí y liberar sus piezas
 const remove = async (id) => {
-  // Primero liberamos todas las piezas asignadas
   await query(`UPDATE Pieza SET id_maniqui = NULL WHERE id_maniqui = ?`, [id]);
-  // Luego eliminamos el maniqui
   await query(`DELETE FROM Maniqui WHERE id_maniqui = ?`, [id]);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // PATCH /maniquies/:id/estado → cambiar estado_ensamblaje
-// ─────────────────────────────────────────────────────────────────
 const updateEstado = async (id, estado) => {
   await query(`UPDATE Maniqui SET estado_ensamblaje = ? WHERE id_maniqui = ?`, [estado, id]);
   return await findById(id);
 };
 
-// ─────────────────────────────────────────────────────────────────
 // PATCH /maniquies/:id/asignar-pieza
-// Valida que la pieza esté libre y que no haya otra de la misma categoría
-// ─────────────────────────────────────────────────────────────────
 const asignarPieza = async (id_maniqui, id_pieza) => {
-  //Verifica que la pieza existe y esta libre
   const piezaLibre = await query(
     `SELECT * FROM Pieza WHERE id_pieza = ? AND id_maniqui IS NULL`,
     [id_pieza]
   );
   if (!piezaLibre[0]) return { error: 'Pieza no disponible o ya asignada' };
 
-  //Obtener la categoria de la pieza nueva
   const catNueva = await query(`
     SELECT Cat.id_categoria 
     FROM Pieza P
@@ -144,7 +117,6 @@ const asignarPieza = async (id_maniqui, id_pieza) => {
   `, [id_pieza]);
   const id_categoria_nueva = catNueva[0]?.id_categoria;
 
-  //Verifica si el maniqui ya tiene una pieza de esa categoria
   const yaAsignada = await query(`
     SELECT P.id_pieza 
     FROM Pieza P
@@ -156,15 +128,12 @@ const asignarPieza = async (id_maniqui, id_pieza) => {
     return { error: 'El maniquí ya tiene una pieza de esa categoría asignada' };
   }
 
-  //Asigna la pieza
   await query(`UPDATE Pieza SET id_maniqui = ? WHERE id_pieza = ?`, [id_maniqui, id_pieza]);
   const piezaActualizada = await query(`SELECT * FROM Pieza WHERE id_pieza = ?`, [id_pieza]);
   return { pieza: piezaActualizada[0] };
 };
 
-// ─────────────────────────────────────────────────────────────────
-// PATCH /maniquies/:id/liberar-pieza → desasignar pieza del maniquí
-// ─────────────────────────────────────────────────────────────────
+// PATCH /maniquies/:id/liberar-pieza
 const liberarPieza = async (id_maniqui, id_pieza) => {
   const pieza = await query(
     `SELECT * FROM Pieza WHERE id_pieza = ? AND id_maniqui = ?`,
@@ -177,4 +146,4 @@ const liberarPieza = async (id_maniqui, id_pieza) => {
   return { pieza: piezaActualizada[0] };
 };
 
-module.exports = { findAll, findById, create, update, remove, updateEstado, asignarPieza, liberarPieza };
+export default { findAll, findById, create, update, remove, updateEstado, asignarPieza, liberarPieza };

@@ -1,11 +1,11 @@
-const mysql = require('mysql2');
+import mysql from 'mysql2';
 
 const connection = mysql.createConnection({
   host: 'localhost',
   port: 3307,
   user: 'root',
-  password: 'root',               
-  database: 'fabrica_maniquies'   
+  password: 'root',
+  database: 'fabrica_maniquies'
 });
 
 connection.connect((err) => {
@@ -16,4 +16,4 @@ connection.connect((err) => {
   console.log('Conexión a MySQL establecida correctamente');
 });
 
-module.exports = connection;
+export default connection;
