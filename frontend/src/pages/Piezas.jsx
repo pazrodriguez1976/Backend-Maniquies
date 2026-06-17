@@ -1,50 +1,46 @@
 import { useState, useEffect } from 'react'
 import Modal from '../components/Modal.jsx'
-import { getPiezas, getPiezasStock, createPieza, updatePieza, deletePieza } from '../api/index.js'
-
-// Datos del catálogo hardcodeados — en el backend están en db.js (arrays en memoria)
-// Cuando se conecte MySQL, esto podría venir de un GET /catalogo
-const CATALOGO = [
-  { id: 1,  descripcion: 'Cabeza de Mujer'   },
-  { id: 2,  descripcion: 'Cabeza de Hombre'  },
-  { id: 3,  descripcion: 'Torso de Mujer'    },
-  { id: 4,  descripcion: 'Torso de Hombre'   },
-  { id: 5,  descripcion: 'Cabeza de Niña'    },
-  { id: 6,  descripcion: 'Cabeza de Niño'    },
-  { id: 7,  descripcion: 'Brazos de Mujer'   },
-  { id: 8,  descripcion: 'Brazos de Hombre'  },
-  { id: 9,  descripcion: 'Piernas de Mujer'  },
-  { id: 10, descripcion: 'Piernas de Hombre' },
-]
+import { getPiezas, getPiezasStock, createPieza, updatePieza, deletePieza, getCatalogo } from '../api/index.js'
 
 const MATERIALES = ['Plástico', 'Fibra', 'Madera', 'Metal']
-const COLORES    = ['Blanco', 'Negro', 'Gris', 'Beige', 'Rojo']
+const COLORES    = ['Blanco', 'Negro', 'Gris', 'Piel', 'Caoba', 'Cromado']
 
 export default function Piezas() {
-  const [piezas,    setPiezas]    = useState([])
+  const [piezas,     setPiezas]     = useState([])
+  const [catalogo,   setCatalogo]   = useState([])
   const [stockCount, setStockCount] = useState(0)
-  const [error,     setError]     = useState(null)
-  const [modal,     setModal]     = useState(null)  // null | 'crear' | 'editar'
-  const [editando,  setEditando]  = useState(null)
+  const [error,      setError]      = useState(null)
+  const [modal,      setModal]      = useState(null)  
+  const [editando,   setEditando]   = useState(null)
+  const [aEliminar,  setAEliminar]  = useState(null) 
   const [form, setForm] = useState({ id_catalogo: '', material: '', color: '' })
+  const [formError, setFormError] = useState(null)
 
-  // Filtros (usa query params del backend GET /piezas?material=X&color=Y)
   const [filtroMat, setFiltroMat] = useState('')
   const [filtroCol, setFiltroCol] = useState('')
   const [filtroEst, setFiltroEst] = useState('')
 
+  useEffect(() => {
+    const cargarCatalogo = async () => {
+      try {
+        const data = await getCatalogo()
+        setCatalogo(data)
+      } catch (e) {
+        setError('No se pudo cargar el catálogo desde el backend.')
+      }
+    }
+    cargarCatalogo()
+  }, [])
+
   const cargar = async () => {
     try {
       setError(null)
-      // Llama a GET /piezas con filtros opcionales
       const data = await getPiezas({ material: filtroMat, color: filtroCol })
-      // Filtra por estado localmente ya que el back no tiene ese query param
       const filtradas = filtroEst
         ? data.filter(p => (filtroEst === 'libre' ? p.id_maniqui === null : p.id_maniqui !== null))
         : data
       setPiezas(filtradas)
 
-      // Llama a GET /piezas/stock para contar las libres
       const stock = await getPiezasStock()
       setStockCount(stock.length)
     } catch (e) {
@@ -54,63 +50,71 @@ export default function Piezas() {
 
   useEffect(() => { cargar() }, [filtroMat, filtroCol, filtroEst])
 
-  const cerrar = () => { setModal(null); setEditando(null) }
+  const cerrar = () => { setModal(null); setEditando(null); setAEliminar(null); setFormError(null) }
 
   const abrirCrear = () => {
     setForm({ id_catalogo: '', material: '', color: '' })
+    setFormError(null)
     setModal('crear')
   }
 
   const abrirEditar = (p) => {
     setForm({ id_catalogo: p.id_catalogo, material: p.material, color: p.color })
     setEditando(p)
+    setFormError(null)
     setModal('editar')
+  }
+
+  // Abre el modal de confirmación de borrado
+  const abrirEliminar = (p) => {
+    if (p.id_maniqui !== null) {
+      setError('No se puede eliminar una pieza asignada a un maniquí. Primero liberala.')
+      setTimeout(() => setError(null), 4000)
+      return
+    }
+    setAEliminar(p)
+    setModal('eliminar')
   }
 
   const handleChange = (e) =>
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
   const handleSubmit = async () => {
+    setFormError(null)
     if (!form.id_catalogo || !form.material || !form.color) {
-      alert('Completá todos los campos')
+      setFormError('Completá todos los campos antes de continuar.')
       return
     }
     try {
       if (modal === 'crear') {
-        // POST /piezas  → el backend setea id_maniqui: null automáticamente
         await createPieza({
           id_catalogo: Number(form.id_catalogo),
           material: form.material,
           color: form.color
         })
       } else {
-        // PUT /piezas/:id  → el backend actualiza material y color
         await updatePieza(editando.id, { material: form.material, color: form.color })
       }
       cerrar()
       cargar()
     } catch (e) {
-      alert(`Error: ${e.message}`)
+      setFormError(e.message)
     }
   }
 
-  const handleEliminar = async (p) => {
-    if (p.id_maniqui !== null) {
-      alert('El backend no permite eliminar piezas asignadas a un maniquí.')
-      return
-    }
-    if (!confirm(`¿Eliminar pieza #${p.id}?`)) return
+  // Confirma el borrado desde el modal
+  const confirmarEliminar = async () => {
     try {
-      // DELETE /piezas/:id
-      await deletePieza(p.id)
+      await deletePieza(aEliminar.id)
+      cerrar()
       cargar()
     } catch (e) {
-      alert(`Error: ${e.message}`)
+      setFormError(e.message)
     }
   }
 
   const nombreCatalogo = (id) =>
-    CATALOGO.find(c => c.id === Number(id))?.descripcion ?? `Catálogo #${id}`
+    catalogo.find(c => c.id === Number(id))?.descripcion ?? `Catálogo #${id}`
 
   const asignadas = piezas.filter(p => p.id_maniqui !== null).length
 
@@ -142,7 +146,7 @@ export default function Piezas() {
         </div>
       </div>
 
-      {/* Filtros → se mandan como query params al backend */}
+      {/* Filtros */}
       <div className="filters">
         <select value={filtroMat} onChange={e => setFiltroMat(e.target.value)}>
           <option value="">Todos los materiales</option>
@@ -189,7 +193,7 @@ export default function Piezas() {
               {piezas.map(p => (
                 <tr key={p.id}>
                   <td style={{ color: 'var(--muted)' }}>{p.id}</td>
-                  <td>{nombreCatalogo(p.id_catalogo)}</td>
+                  <td>{p.descripcion || nombreCatalogo(p.id_catalogo)}</td>
                   <td>{p.material}</td>
                   <td>{p.color}</td>
                   <td>
@@ -203,7 +207,7 @@ export default function Piezas() {
                   <td>
                     <div className="td-actions">
                       <button className="btn btn-outline btn-sm" onClick={() => abrirEditar(p)}>Editar</button>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleEliminar(p)}>Eliminar</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => abrirEliminar(p)}>Eliminar</button>
                     </div>
                   </td>
                 </tr>
@@ -214,13 +218,17 @@ export default function Piezas() {
       )}
 
       {/* Modal Crear / Editar */}
-      {modal && (
+      {(modal === 'crear' || modal === 'editar') && (
         <Modal title={modal === 'crear' ? 'NUEVA PIEZA' : 'EDITAR PIEZA'} onClose={cerrar}>
+          {formError && (
+            <div className="error-banner" style={{ marginBottom: '1rem' }}>⚠ {formError}</div>
+          )}
+
           <div className="form-group">
             <label>Tipo de pieza (catálogo)</label>
             <select name="id_catalogo" value={form.id_catalogo} onChange={handleChange} disabled={modal === 'editar'}>
               <option value="">Seleccioná...</option>
-              {CATALOGO.map(c => <option key={c.id} value={c.id}>{c.descripcion}</option>)}
+              {catalogo.map(c => <option key={c.id} value={c.id}>{c.descripcion}</option>)}
             </select>
           </div>
           <div className="form-group">
@@ -237,16 +245,29 @@ export default function Piezas() {
               {COLORES.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
-          {modal === 'crear' && (
-            <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-             
-            </p>
-          )}
           <div className="modal-footer">
             <button className="btn btn-outline" onClick={cerrar}>Cancelar</button>
             <button className="btn btn-primary" onClick={handleSubmit}>
               {modal === 'crear' ? 'Crear pieza' : 'Guardar cambios'}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Confirmar Eliminar */}
+      {modal === 'eliminar' && aEliminar && (
+        <Modal title="ELIMINAR PIEZA" onClose={cerrar}>
+          {formError && (
+            <div className="error-banner" style={{ marginBottom: '1rem' }}>⚠ {formError}</div>
+          )}
+          <p style={{ marginBottom: '1.5rem' }}>
+            ¿Seguro que querés eliminar la pieza <strong>#{aEliminar.id}</strong>
+            {' '}({aEliminar.descripcion || nombreCatalogo(aEliminar.id_catalogo)})?
+            Esta acción no se puede deshacer.
+          </p>
+          <div className="modal-footer">
+            <button className="btn btn-outline" onClick={cerrar}>Cancelar</button>
+            <button className="btn btn-danger" onClick={confirmarEliminar}>Sí, eliminar</button>
           </div>
         </Modal>
       )}

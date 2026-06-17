@@ -48,6 +48,12 @@ export const updatePieza = (id, data) =>
 export const deletePieza = (id) =>
   fetch(`${BASE}/piezas/${id}`, { method: 'DELETE' }).then(handleResponse)
 
+// GET /catalogo → tipos de pieza (modelo + categoría)
+export const getCatalogo = () =>
+  fetch(`${BASE}/catalogo`).then(handleResponse)
+
+export const getModelos = () =>
+  fetch(`${BASE}/modelos`).then(handleResponse)
 // ── MANIQUIES ────────────────────────────────────────────────────────────────
 
 // GET /maniquies
