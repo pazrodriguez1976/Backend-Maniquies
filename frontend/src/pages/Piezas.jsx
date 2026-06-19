@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react'
 import Modal from '../components/Modal.jsx'
+import Dropdown from '../components/Dropdown.jsx'
 import { getPiezas, getPiezasStock, createPieza, updatePieza, deletePieza, getCatalogo } from '../api/index.js'
 
 const MATERIALES = ['Plástico', 'Fibra', 'Madera', 'Metal']
 const COLORES    = ['Blanco', 'Negro', 'Gris', 'Piel', 'Caoba', 'Cromado']
+
+// Helper: convierte un array de strings en opciones {value, label}
+const opc = (arr) => arr.map(x => ({ value: x, label: x }))
 
 export default function Piezas() {
   const [piezas,     setPiezas]     = useState([])
   const [catalogo,   setCatalogo]   = useState([])
   const [stockCount, setStockCount] = useState(0)
   const [error,      setError]      = useState(null)
-  const [modal,      setModal]      = useState(null)  
+  const [modal,      setModal]      = useState(null)
   const [editando,   setEditando]   = useState(null)
-  const [aEliminar,  setAEliminar]  = useState(null) 
+  const [aEliminar,  setAEliminar]  = useState(null)
   const [form, setForm] = useState({ id_catalogo: '', material: '', color: '' })
   const [formError, setFormError] = useState(null)
 
@@ -65,7 +69,6 @@ export default function Piezas() {
     setModal('editar')
   }
 
-  // Abre el modal de confirmación de borrado
   const abrirEliminar = (p) => {
     if (p.id_maniqui !== null) {
       setError('No se puede eliminar una pieza asignada a un maniquí. Primero liberala.')
@@ -76,8 +79,9 @@ export default function Piezas() {
     setModal('eliminar')
   }
 
-  const handleChange = (e) =>
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  // Para el Dropdown: actualiza un campo del form
+  const setCampo = (campo, valor) =>
+    setForm(prev => ({ ...prev, [campo]: valor }))
 
   const handleSubmit = async () => {
     setFormError(null)
@@ -102,7 +106,6 @@ export default function Piezas() {
     }
   }
 
-  // Confirma el borrado desde el modal
   const confirmarEliminar = async () => {
     try {
       await deletePieza(aEliminar.id)
@@ -117,6 +120,9 @@ export default function Piezas() {
     catalogo.find(c => c.id === Number(id))?.descripcion ?? `Catálogo #${id}`
 
   const asignadas = piezas.filter(p => p.id_maniqui !== null).length
+
+  // Opciones del catálogo para el Dropdown
+  const opcionesCatalogo = catalogo.map(c => ({ value: c.id, label: c.descripcion }))
 
   return (
     <div className="page">
@@ -146,21 +152,36 @@ export default function Piezas() {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros con Dropdown */}
       <div className="filters">
-        <select value={filtroMat} onChange={e => setFiltroMat(e.target.value)}>
-          <option value="">Todos los materiales</option>
-          {MATERIALES.map(m => <option key={m}>{m}</option>)}
-        </select>
-        <select value={filtroCol} onChange={e => setFiltroCol(e.target.value)}>
-          <option value="">Todos los colores</option>
-          {COLORES.map(c => <option key={c}>{c}</option>)}
-        </select>
-        <select value={filtroEst} onChange={e => setFiltroEst(e.target.value)}>
-          <option value="">Todos los estados</option>
-          <option value="libre">Libre</option>
-          <option value="asignada">Asignada</option>
-        </select>
+        <div style={{ minWidth: 170 }}>
+          <Dropdown
+            value={filtroMat}
+            onChange={setFiltroMat}
+            options={[{ value: '', label: 'Todos los materiales' }, ...opc(MATERIALES)]}
+            placeholder="Todos los materiales"
+          />
+        </div>
+        <div style={{ minWidth: 170 }}>
+          <Dropdown
+            value={filtroCol}
+            onChange={setFiltroCol}
+            options={[{ value: '', label: 'Todos los colores' }, ...opc(COLORES)]}
+            placeholder="Todos los colores"
+          />
+        </div>
+        <div style={{ minWidth: 170 }}>
+          <Dropdown
+            value={filtroEst}
+            onChange={setFiltroEst}
+            options={[
+              { value: '', label: 'Todos los estados' },
+              { value: 'libre', label: 'Libre' },
+              { value: 'asignada', label: 'Asignada' },
+            ]}
+            placeholder="Todos los estados"
+          />
+        </div>
         {(filtroMat || filtroCol || filtroEst) && (
           <button className="btn btn-outline btn-sm"
             onClick={() => { setFiltroMat(''); setFiltroCol(''); setFiltroEst('') }}>
@@ -226,24 +247,31 @@ export default function Piezas() {
 
           <div className="form-group">
             <label>Tipo de pieza (catálogo)</label>
-            <select name="id_catalogo" value={form.id_catalogo} onChange={handleChange} disabled={modal === 'editar'}>
-              <option value="">Seleccioná...</option>
-              {catalogo.map(c => <option key={c.id} value={c.id}>{c.descripcion}</option>)}
-            </select>
+            <Dropdown
+              value={form.id_catalogo}
+              onChange={(v) => setCampo('id_catalogo', v)}
+              options={opcionesCatalogo}
+              placeholder="Seleccioná..."
+              disabled={modal === 'editar'}
+            />
           </div>
           <div className="form-group">
             <label>Material</label>
-            <select name="material" value={form.material} onChange={handleChange}>
-              <option value="">Seleccioná...</option>
-              {MATERIALES.map(m => <option key={m}>{m}</option>)}
-            </select>
+            <Dropdown
+              value={form.material}
+              onChange={(v) => setCampo('material', v)}
+              options={opc(MATERIALES)}
+              placeholder="Seleccioná..."
+            />
           </div>
           <div className="form-group">
             <label>Color</label>
-            <select name="color" value={form.color} onChange={handleChange}>
-              <option value="">Seleccioná...</option>
-              {COLORES.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <Dropdown
+              value={form.color}
+              onChange={(v) => setCampo('color', v)}
+              options={opc(COLORES)}
+              placeholder="Seleccioná..."
+            />
           </div>
           <div className="modal-footer">
             <button className="btn btn-outline" onClick={cerrar}>Cancelar</button>

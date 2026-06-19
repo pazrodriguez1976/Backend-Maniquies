@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Modal from '../components/Modal.jsx'
+import Dropdown from '../components/Dropdown.jsx'
 import {
   getManiquies, getManiquiById,
   createManiqui, updateManiqui, deleteManiqui,
@@ -10,6 +11,8 @@ import {
 const ESTADOS    = ['Pendiente', 'En proceso', 'Ensamblado']
 const MATERIALES = ['Plástico', 'Fibra', 'Madera', 'Metal']
 const COLORES    = ['Blanco', 'Negro', 'Gris', 'Piel', 'Caoba', 'Cromado']
+
+const opc = (arr) => arr.map(x => ({ value: x, label: x }))
 
 const badgeEstado = (e) => {
   if (e === 'Pendiente')  return 'badge-pendiente'
@@ -64,8 +67,8 @@ export default function Maniquies() {
     setModal(null); setSeleccionado(null); setDetalle(null); setFormError(null); setAEliminar(null)
   }
 
-  const handleChange = (e) =>
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  const setCampo = (campo, valor) =>
+    setForm(prev => ({ ...prev, [campo]: valor }))
 
   const nombreCatalogo = (id) =>
     catalogo.find(c => c.id === Number(id))?.descripcion ?? `Catálogo #${id}`
@@ -109,7 +112,7 @@ export default function Maniquies() {
     } catch (e) { setFormError(e.message) }
   }
 
-  // ── Eliminar (abre modal de confirmación) ──
+  // ── Eliminar ──
   const abrirEliminar = (m) => {
     setAEliminar(m)
     setModal('eliminar')
@@ -185,6 +188,13 @@ export default function Maniquies() {
   const pendientes = maniquies.filter(m => m.estado === 'Pendiente').length
   const enProceso  = maniquies.filter(m => m.estado === 'En proceso').length
   const terminados = maniquies.filter(m => m.estado === 'Ensamblado').length
+
+  // Opciones para los dropdowns
+  const opcionesModelos = modelos.map(m => ({ value: m.id, label: `${m.nombre_modelo} (${m.linea_producto})` }))
+  const opcionesStock = piezasStock.map(p => ({
+    value: p.id,
+    label: `#${p.id} — ${p.descripcion || nombreCatalogo(p.id_catalogo)} (${p.material} / ${p.color})`
+  }))
 
   return (
     <div className="page">
@@ -263,24 +273,31 @@ export default function Maniquies() {
           )}
           <div className="form-group">
             <label>Modelo de maniquí</label>
-            <select name="id_modelo" value={form.id_modelo} onChange={handleChange} disabled={modal === 'editar'}>
-              <option value="">Seleccioná...</option>
-              {modelos.map(m => <option key={m.id} value={m.id}>{m.nombre_modelo} ({m.linea_producto})</option>)}
-            </select>
+            <Dropdown
+              value={form.id_modelo}
+              onChange={(v) => setCampo('id_modelo', v)}
+              options={opcionesModelos}
+              placeholder="Seleccioná..."
+              disabled={modal === 'editar'}
+            />
           </div>
           <div className="form-group">
             <label>Material</label>
-            <select name="material" value={form.material} onChange={handleChange}>
-              <option value="">Seleccioná...</option>
-              {MATERIALES.map(m => <option key={m}>{m}</option>)}
-            </select>
+            <Dropdown
+              value={form.material}
+              onChange={(v) => setCampo('material', v)}
+              options={opc(MATERIALES)}
+              placeholder="Seleccioná..."
+            />
           </div>
           <div className="form-group">
             <label>Color</label>
-            <select name="color" value={form.color} onChange={handleChange}>
-              <option value="">Seleccioná...</option>
-              {COLORES.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <Dropdown
+              value={form.color}
+              onChange={(v) => setCampo('color', v)}
+              options={opc(COLORES)}
+              placeholder="Seleccioná..."
+            />
           </div>
           <div className="modal-footer">
             <button className="btn btn-outline" onClick={cerrar}>Cancelar</button>
@@ -370,15 +387,15 @@ export default function Maniquies() {
             {piezasStock.length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>No hay piezas libres en el depósito.</p>
             ) : (
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <select value={piezaAsignar} onChange={e => setPiezaAsignar(e.target.value)} style={{ flex: 1 }}>
-                  <option value="">Seleccioná una pieza...</option>
-                  {piezasStock.map(p => (
-                    <option key={p.id} value={p.id}>
-                      #{p.id} — {p.descripcion || nombreCatalogo(p.id_catalogo)} ({p.material} / {p.color})
-                    </option>
-                  ))}
-                </select>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <Dropdown
+                    value={piezaAsignar}
+                    onChange={setPiezaAsignar}
+                    options={opcionesStock}
+                    placeholder="Seleccioná una pieza..."
+                  />
+                </div>
                 <button className="btn btn-primary" onClick={handleAsignar}>Asignar</button>
               </div>
             )}

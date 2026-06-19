@@ -122,8 +122,17 @@ body {
 /* ── Table ── */
 .table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 60vh;         
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+
+
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
@@ -306,3 +315,101 @@ select option { background: var(--surface2); }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.dropdown {
+  position: relative;
+  width: 100%;
+}
+
+/* Botón que muestra la opción elegida */
+.dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  text-align: left;
+}
+
+.dropdown-trigger:hover {
+  border-color: var(--accent);
+}
+
+.dropdown-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dropdown-disabled:hover {
+  border-color: var(--border);
+}
+
+.dropdown-placeholder {
+  color: var(--muted);
+}
+
+/* Flechita */
+.dropdown-arrow {
+  color: var(--accent);
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+
+.dropdown-arrow.abierto {
+  transform: rotate(180deg);
+}
+
+/* Menú desplegado */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  z-index: 300;
+  max-height: 240px;
+  overflow-y: auto;
+  animation: dropdownAbrir 0.15s ease;
+}
+
+@keyframes dropdownAbrir {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Cada opción */
+.dropdown-option {
+  padding: 0.55rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+  transition: background 0.12s, color 0.12s;
+}
+
+/* Al pasar el mouse */
+.dropdown-option:hover {
+  background: rgba(249, 115, 22, 0.15);
+  color: var(--accent);
+}
+
+/* La opción que está seleccionada → naranja */
+.dropdown-option.seleccionada {
+  background: rgba(249, 115, 22, 0.15);
+  color: var(--accent);
+  font-weight: 600;
+}
